@@ -183,3 +183,4 @@ cython_debug/
 .azure
 
 GEMINI.md
+pg-pw.txt
