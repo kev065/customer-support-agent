@@ -1,8 +1,8 @@
 
 from fastapi import FastAPI
-from .database import get_postgres_connection, get_qdrant_client
-from .llm import get_chain
-from .retrievers import get_postgres_data, get_qdrant_retriever
+from database import get_postgres_connection, get_qdrant_client
+from llm import get_chain
+from retrievers import get_postgres_data, get_qdrant_retriever
 
 app = FastAPI()
 

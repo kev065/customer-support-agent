@@ -6,7 +6,7 @@ import "@copilotkit/react-ui/styles.css";
 
 export default function Home() {
   return (
-    <CopilotKit url="http://localhost:8000/chat">
+    <CopilotKit runtimeUrl="http://localhost:8000/chat">
       <CopilotPopup
         instructions="Welcome to the customer support agent! How can I help you today?"
         defaultOpen={true}
