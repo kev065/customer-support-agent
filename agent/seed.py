@@ -2,11 +2,16 @@
 import psycopg2
 from faker import Faker
 import random
+import uuid
 from config import settings
 import faker_commerce
 
 def create_tables(conn):
     with conn.cursor() as cur:
+        cur.execute("DROP TABLE IF EXISTS order_items CASCADE;")
+        cur.execute("DROP TABLE IF EXISTS orders CASCADE;")
+        cur.execute("DROP TABLE IF EXISTS products CASCADE;")
+        cur.execute("DROP TABLE IF EXISTS users CASCADE;")
         cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             user_id SERIAL PRIMARY KEY,
@@ -27,6 +32,7 @@ def create_tables(conn):
         cur.execute("""
         CREATE TABLE IF NOT EXISTS orders (
             order_id SERIAL PRIMARY KEY,
+            order_number VARCHAR(255) UNIQUE NOT NULL,
             user_id INTEGER REFERENCES users(user_id),
             order_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
             status VARCHAR(50) NOT NULL,
@@ -74,8 +80,9 @@ def seed_data(conn, num_users=1000, num_products=500, num_orders=2000):
             user_id = random.choice(user_ids)
             order_date = fake.date_time_this_decade()
             order_status = random.choice(['pending', 'shipped', 'delivered', 'cancelled'])
-            cur.execute("INSERT INTO orders (user_id, order_date, status, total_amount) VALUES (%s, %s, %s, 0) RETURNING order_id",
-                        (user_id, order_date, order_status))
+            order_number = f"ORD-{uuid.uuid4()}"
+            cur.execute("INSERT INTO orders (order_number, user_id, order_date, status, total_amount) VALUES (%s, %s, %s, %s, 0) RETURNING order_id",
+                        (order_number, user_id, order_date, order_status))
             order_id = cur.fetchone()[0]
             
             num_order_items = random.randint(1, 5)
