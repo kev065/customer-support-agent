@@ -1,41 +1,42 @@
 from fastapi import FastAPI
-from agent.database import get_postgres_connection, get_qdrant_client
-from agent.llm import get_chain
-from agent.retrievers import get_postgres_data, get_qdrant_retriever
+from fastapi.middleware.cors import CORSMiddleware
+
+from copilotkit import CopilotKitRemoteEndpoint, LangGraphAgent
+from copilotkit.integrations.fastapi import add_fastapi_endpoint
+
+from agent.llm import create_agent_graph
+
 
 app = FastAPI()
 
-@app.on_event("startup")
-async def startup_event():
-    app.state.db_connection = get_postgres_connection()
-    app.state.qdrant_client = get_qdrant_client()
-    app.state.llm_chain = get_chain()
-    app.state.qdrant_retriever = get_qdrant_retriever()
+# Add CORS middleware to allow requests from the frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # The address of your Next.js frontend
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    app.state.db_connection.close()
 
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
+# Create the LangGraph agent graph
+agent_graph = create_agent_graph()
 
-@app.get("/status")
-def get_status():
-    return {"postgres_status": "connected" if app.state.db_connection else "disconnected",
-            "qdrant_status": "connected" if app.state.qdrant_client else "disconnected"}
+# Initialize a CopilotKit remote endpoint and register the LangGraph agent
+sdk = CopilotKitRemoteEndpoint(
+    agents=[
+        LangGraphAgent(
+            name="customer_support_agent",
+            description="Hyper-aware customer support agent backed by Postgres and Qdrant",
+            graph=agent_graph,
+        )
+    ]
+)
 
-@app.post("/chat")
-async def chat(question: str):
-    response = app.state.llm_chain.invoke({"question": question})
-    return {"response": response}
+# Mount the CopilotKit endpoint at /copilotkit
+add_fastapi_endpoint(app, sdk, "/copilotkit", use_thread_pool=False)
 
-@app.post("/query_postgres")
-def query_postgres(query: str):
-    data = get_postgres_data(query)
-    return {"data": data}
 
-@app.post("/query_qdrant")
-def query_qdrant(query: str):
-    # This is a placeholder for the actual Qdrant query logic.
-    return {"data": "Qdrant retriever not implemented yet."}
+@app.get("/health")
+def health():
+    return {"status": "ok"}

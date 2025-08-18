@@ -1,19 +1,22 @@
 
-from agent.database import get_postgres_connection, get_qdrant_client
+from langchain_qdrant import Qdrant
 from langchain_openai import OpenAIEmbeddings
+from qdrant_client import QdrantClient
+
 from agent.config import settings
 
-def get_postgres_data(query: str):
-    conn = get_postgres_connection()
-    with conn.cursor() as cur:
-        cur.execute(query)
-        result = cur.fetchall()
-    conn.close()
-    return result
 
 def get_qdrant_retriever():
+    """
+    Initializes and returns a Qdrant vector store retriever.
+    """
     embeddings = OpenAIEmbeddings(api_key=settings.openai_api_key)
-    client = get_qdrant_client()
-    # This is a placeholder for the actual retriever logic.
-    # The actual implementation will depend on the Qdrant collection and the data model.
-    return None
+    client = QdrantClient(url=settings.qdrant_url)
+
+    vector_store = Qdrant(
+        client=client,
+        collection_name="products",
+        embeddings=embeddings,
+    )
+    
+    return vector_store.as_retriever()
