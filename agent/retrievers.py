@@ -1,5 +1,5 @@
 
-from database import get_postgres_connection, get_qdrant_client
+from agent.database import get_postgres_connection, get_qdrant_client
 from langchain_openai import OpenAIEmbeddings
 from agent.config import settings
 
