@@ -32,12 +32,11 @@ class PostgresListener:
 
     def _setup_qdrant_collection(self):
         """Ensures the Qdrant collection exists."""
-        try:
-            self.qdrant_client.get_collection(collection_name=QDRANT_COLLECTION_NAME)
+        if self.qdrant_client.collection_exists(collection_name=QDRANT_COLLECTION_NAME):
             logging.info(f"Qdrant collection '{QDRANT_COLLECTION_NAME}' already exists.")
-        except Exception:
+        else:
             logging.info(f"Creating Qdrant collection: '{QDRANT_COLLECTION_NAME}'")
-            self.qdrant_client.recreate_collection(
+            self.qdrant_client.create_collection(
                 collection_name=QDRANT_COLLECTION_NAME,
                 vectors_config=models.VectorParams(size=VECTOR_SIZE, distance=models.Distance.COSINE),
             )
@@ -46,7 +45,7 @@ class PostgresListener:
         """Fetches a single product from the database."""
         with psycopg.connect(settings.database_url, row_factory=dict_row) as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT * FROM products WHERE id = %s;", (product_id,))
+                cur.execute("SELECT * FROM products WHERE product_id = %s;", (product_id,))
                 return cur.fetchone()
 
     def _handle_notification(self, payload: str):
