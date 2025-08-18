@@ -1,11 +1,14 @@
 
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from config import settings
+from agent.config import settings
 
 def get_llm():
     return ChatOpenAI(api_key=settings.openai_api_key)
+
+def get_embeddings():
+    return OpenAIEmbeddings(api_key=settings.openai_api_key)
 
 def get_chain():
     prompt = ChatPromptTemplate.from_messages([

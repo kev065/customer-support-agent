@@ -3,7 +3,7 @@ import psycopg2
 from faker import Faker
 import random
 import uuid
-from config import settings
+from agent.config import settings
 import faker_commerce
 
 def create_tables(conn):

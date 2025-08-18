@@ -1,7 +1,7 @@
 
 import psycopg2
 from qdrant_client import QdrantClient
-from config import settings
+from agent.config import settings
 
 def get_postgres_connection():
     conn = psycopg2.connect(settings.database_url)

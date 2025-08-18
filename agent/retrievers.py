@@ -1,7 +1,7 @@
 
 from database import get_postgres_connection, get_qdrant_client
 from langchain_openai import OpenAIEmbeddings
-from config import settings
+from agent.config import settings
 
 def get_postgres_data(query: str):
     conn = get_postgres_connection()
