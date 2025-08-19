@@ -79,4 +79,3 @@ def get_order_details(order_id: int) -> str:
 
 all_tools: List = [product_search_tool, get_order_details]
 
-

@@ -22,6 +22,7 @@ It will print model responses and any tool outputs. Traces will be emitted to La
 import os
 import sys
 import logging
+import json
 from typing import Any, Dict
 
 from dotenv import load_dotenv
@@ -102,6 +103,47 @@ def run_tool(tool: Any, arg: Any):
         return f"(tool error) {e}"
 
 
+def pretty_format_tool_result(result: Any) -> str:
+    """Convert various tool result types into a human-friendly string.
+
+    Handles:
+      - langchain Document lists (has page_content)
+      - lists of dicts (e.g., DB rows)
+      - single dicts
+      - other objects (fall back to str)
+    """
+    # Documents from LangChain
+    try:
+        if isinstance(result, list) and result:
+            first = result[0]
+            # LangChain Document-like objects
+            if hasattr(first, "page_content"):
+                parts = []
+                for i, doc in enumerate(result[:10], 1):
+                    meta = getattr(doc, "metadata", {})
+                    parts.append(f"[{i}] {getattr(doc, 'page_content', '')}\n  metadata: {json.dumps(meta)}")
+                if len(result) > 10:
+                    parts.append(f"...and {len(result)-10} more documents")
+                return "\n\n".join(parts)
+
+        # List of dict-like rows (e.g., DB results)
+        if isinstance(result, list) and all(isinstance(r, dict) for r in result):
+            return "\n\n".join(json.dumps(r, default=str, indent=2) for r in result)
+
+        if isinstance(result, dict):
+            return json.dumps(result, default=str, indent=2)
+
+    except Exception:
+        # Fall back to str()
+        pass
+
+    # Default
+    try:
+        return str(result)
+    except Exception:
+        return repr(result)
+
+
 def main():
     llm = get_llm()
 
@@ -112,7 +154,13 @@ def main():
         # If bind_tools isn't available, we'll still call the LLM and then run tools manually
         model_with_tools = llm
 
-    system_message = SystemMessage(content="You are a helpful customer support assistant. Use tools when needed: product_semantic_search and get_order_details.")
+    # System instruction: prefer natural language responses.
+    system_message = SystemMessage(content=(
+        "You are a helpful customer support assistant. Use tools when needed: product_semantic_search and get_order_details. "
+        "When replying to the user, always start with a concise, natural-language answer (one or two sentences). "
+        "If you include structured data, put a short natural-language summary first, then include the data as JSON only when explicitly asked. "
+        "Be brief and user-facing — do not return raw Python objects or plain JSON unless the user asks for it."
+    ))
 
     print("Terminal LangChain REPL (type 'exit' to quit)")
     print("Examples: 'What products are good for hiking?', 'Get order 1234'\n")
@@ -151,6 +199,9 @@ def main():
         tool_calls = getattr(response, "tool_calls", None) or []
         if tool_calls:
             print("\n[Detected tool calls]")
+
+            # Run each tool once, collect pretty outputs and raw outputs for the model
+            tool_outputs_for_model = []
             for tc in tool_calls:
                 name = tc.get("name")
                 args = tc.get("args") or tc.get("input")
@@ -159,27 +210,29 @@ def main():
                 tool = find_tool_by_name(name)
                 if not tool:
                     print(f"  -> No tool named {name} registered locally.")
+                    tool_outputs_for_model.append((name, f"(no local tool)"))
                     continue
 
-                res = run_tool(tool, args)
-                print("  -> Tool result:\n", res)
+                raw_res = run_tool(tool, args)
+                pretty = pretty_format_tool_result(raw_res)
+                print("  -> Tool result:\n", pretty)
+                tool_outputs_for_model.append((name, pretty))
 
-            # Optionally, send tool outputs back to the model for a follow-up
-            followup_texts = []
-            for tc in tool_calls:
-                tool_name = tc.get("name")
-                tool = find_tool_by_name(tool_name)
-                if not tool:
-                    continue
-                res = run_tool(tool, tc.get("args") or tc.get("input"))
-                followup_texts.append(f"Result of {tool_name}: {res}")
+            # Send tool outputs back to the model in a single assistant message.
+            # We wrap outputs clearly so the model knows these are tool results and
+            # must produce a natural-language reply for the user.
+            followup_parts = []
+            for name, pretty in tool_outputs_for_model:
+                followup_parts.append(f"TOOL_OUTPUT {name}:")
+                followup_parts.append(pretty)
 
-            if followup_texts:
-                assistant_msg = AIMessage(content="\n\n".join(followup_texts))
+            if followup_parts:
+                assistant_msg = AIMessage(content="\n\n".join(followup_parts))
                 try:
                     # Ask the model to continue the conversation with tool outputs
                     response2 = model_with_tools.invoke([system_message, human, assistant_msg])
-                    print("\n[Assistant after tools]\n", getattr(response2, "content", str(response2)))
+                    final = getattr(response2, "content", str(response2))
+                    print("\n[Assistant after tools]\n", final)
                 except Exception as e:
                     logger.exception("Failed to invoke model after tool outputs: %s", e)
 
