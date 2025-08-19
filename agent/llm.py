@@ -3,7 +3,7 @@ from typing import List
 
 from langchain_core.messages import BaseMessage, SystemMessage, AIMessage
 from langchain_core.runnables import RunnableConfig
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
@@ -22,6 +22,16 @@ class AgentState(CopilotKitState):
 def get_llm():
     """Initializes the LLM used by the agent."""
     return ChatOpenAI(api_key=settings.openai_api_key, model="gpt-4-turbo", temperature=0)
+
+
+def get_embeddings():
+    """Return an embeddings object compatible with the rest of the code.
+
+    The sync script expects an object with an `embed_query(text)` method.
+    `OpenAIEmbeddings` from `langchain_openai` provides `embed_query`, so we
+    return an instance configured with the project's OpenAI key.
+    """
+    return OpenAIEmbeddings(api_key=settings.openai_api_key)
 
 
 async def chat_node(state: AgentState, config: RunnableConfig) -> Command:
