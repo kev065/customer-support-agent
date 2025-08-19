@@ -120,8 +120,34 @@ def pretty_format_tool_result(result: Any) -> str:
             if hasattr(first, "page_content"):
                 parts = []
                 for i, doc in enumerate(result[:10], 1):
-                    meta = getattr(doc, "metadata", {})
-                    parts.append(f"[{i}] {getattr(doc, 'page_content', '')}\n  metadata: {json.dumps(meta)}")
+                    meta = getattr(doc, "metadata", {}) or {}
+                    content = getattr(doc, 'page_content', '') or ''
+                    # If page_content is empty, try to build a short summary from metadata
+                    if not content or not content.strip():
+                        # common metadata keys that may contain useful text
+                        candidates = []
+                        for k in ("description", "text", "content", "name"):
+                            v = meta.get(k)
+                            if v:
+                                candidates.append(str(v))
+                        # also some Qdrant payloads are nested under 'payload' key
+                        if not candidates and isinstance(meta.get('payload'), dict):
+                            payload = meta.get('payload')
+                            for k in ("description", "text", "name"):
+                                v = payload.get(k)
+                                if v:
+                                    candidates.append(str(v))
+
+                        content = candidates[0] if candidates else ''
+
+                    # Build a readable line including metadata highlights
+                    meta_summary = {}
+                    for key in ("name", "id", "score"):
+                        if key in meta:
+                            meta_summary[key] = meta[key]
+
+                    meta_json = json.dumps(meta_summary) if meta_summary else json.dumps(meta)
+                    parts.append(f"[{i}] {content}\n  metadata: {meta_json}")
                 if len(result) > 10:
                     parts.append(f"...and {len(result)-10} more documents")
                 return "\n\n".join(parts)
