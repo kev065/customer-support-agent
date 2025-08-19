@@ -1,4 +1,3 @@
-
 import psycopg2
 from qdrant_client import QdrantClient
 from agent.config import settings

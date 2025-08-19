@@ -9,11 +9,10 @@ from qdrant_client import QdrantClient, models
 from agent.config import settings
 from agent.llm import get_embeddings
 
-# --- Configuration ---
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 QDRANT_COLLECTION_NAME = "products"
-BATCH_SIZE = 128  # Process records in batches for efficiency
+BATCH_SIZE = 128  # Process records in batches
 
 
 def backfill_products():
@@ -49,7 +48,7 @@ def backfill_products():
                             models.PointStruct(
                                 id=product['product_id'],
                                 vector=vector,
-                                payload=dict(product), # Use the whole product row as payload
+                                payload=dict(product),
                             )
                         )
                     
@@ -70,6 +69,4 @@ def backfill_products():
 
 
 if __name__ == "__main__":
-    # Note: Ensure your Qdrant collection is created before running this.
-    # The sync.py script already handles this, so it's best to run it at least once first.
     backfill_products()

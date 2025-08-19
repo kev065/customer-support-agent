@@ -18,17 +18,26 @@ from typing import Any, Dict, List, Optional
 
 app = FastAPI()
 
-# Add CORS middleware to allow requests from the frontend
+@app.middleware("http")
+async def ensure_copilotkit_trailing_slash(request, call_next):
+    try:
+        path = request.url.path
+        # Only rewrite POST/OPTIONS to avoid interfering with other methods
+        if path == "/copilotkit" and request.method in ("POST", "OPTIONS"):
+            request.scope["path"] = "/copilotkit/"
+    except Exception:
+        pass
+    return await call_next(request)
+
+# CORS 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # The address of your Next.js frontend
+    allow_origins=["http://localhost:3000"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-# Create the LangGraph agent graph
 agent_graph = create_agent_graph()
 
 # Initialize a CopilotKit remote endpoint and register the LangGraph agent
@@ -51,7 +60,7 @@ def health():
     return {"status": "ok"}
 
 
-# Simple in-memory session store for demo purposes. Replace with Redis/db in prod.
+# in-memory session store for simple demo 
 SESSIONS: Dict[str, Dict[str, Any]] = {}
 
 
