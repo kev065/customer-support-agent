@@ -154,13 +154,12 @@ def main():
         # If bind_tools isn't available, we'll still call the LLM and then run tools manually
         model_with_tools = llm
 
-    # System instruction: prefer natural language responses.
-    system_message = SystemMessage(content=(
-        "You are a helpful customer support assistant. Use tools when needed: product_semantic_search and get_order_details. "
-        "When replying to the user, always start with a concise, natural-language answer (one or two sentences). "
-        "If you include structured data, put a short natural-language summary first, then include the data as JSON only when explicitly asked. "
-        "Be brief and user-facing — do not return raw Python objects or plain JSON unless the user asks for it."
-    ))
+    # Session memory stored locally in the REPL (short-lived per process run)
+    session_state: dict = {}
+
+    # We'll build the system instruction per-turn so we can surface any short-term
+    # memory (for example: last_order_id) to the model. This helps the model avoid
+    # asking for the order id again on follow-up turns.
 
     print("Terminal LangChain REPL (type 'exit' to quit)")
     print("Examples: 'What products are good for hiking?', 'Get order 1234'\n")
@@ -177,7 +176,22 @@ def main():
         if user_input.lower() in ("exit", "quit"):
             break
 
-        # Build messages for the LLM
+        # Build messages for the LLM. Include session memory in the system prompt.
+        mem_hint = ""
+        if session_state.get("last_order_id"):
+            mem_hint = (
+                f"\nSession memory: the user previously provided order id={session_state['last_order_id']}. "
+                "If the user asks about that order, you may use this id without asking again."
+            )
+
+        system_message = SystemMessage(content=(
+            "You are a helpful customer support assistant. Use tools when needed: product_semantic_search and get_order_details. "
+            "When replying to the user, always start with a concise, natural-language answer (one or two sentences). "
+            "If you include structured data, put a short natural-language summary first, then include the data as JSON only when explicitly asked. "
+            "Be brief and user-facing — do not return raw Python objects or plain JSON unless the user asks for it."
+            + mem_hint
+        ))
+
         human = HumanMessage(content=user_input)
         try:
             # Try a synchronous invoke first
@@ -205,6 +219,11 @@ def main():
             for tc in tool_calls:
                 name = tc.get("name")
                 args = tc.get("args") or tc.get("input")
+                # If the model called get_order_details without args, use session memory
+                # to fill the missing order id when available.
+                if not args and name == "get_order_details" and session_state.get("last_order_id"):
+                    args = {"order_id": session_state["last_order_id"]}
+                    print(f"  -> Using remembered order_id={session_state['last_order_id']} for tool {name}")
                 print(f"- Tool: {name}, args: {args}")
 
                 tool = find_tool_by_name(name)
@@ -217,6 +236,19 @@ def main():
                 pretty = pretty_format_tool_result(raw_res)
                 print("  -> Tool result:\n", pretty)
                 tool_outputs_for_model.append((name, pretty))
+
+                # Try to detect order id in the tool result so we can remember it for
+                # follow-up turns. We look for a line like 'Order ID: 1234'.
+                try:
+                    if name == "get_order_details":
+                        import re
+
+                        m = re.search(r"Order ID:\s*(\d+)", pretty)
+                        if m:
+                            session_state["last_order_id"] = int(m.group(1))
+                except Exception:
+                    # non-fatal; if parsing fails we just don't update memory
+                    pass
 
             # Send tool outputs back to the model in a single assistant message.
             # We wrap outputs clearly so the model knows these are tool results and
