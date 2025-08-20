@@ -1,20 +1,37 @@
+from typing import List, Annotated
 
-from typing import List
-
-from langchain_core.messages import BaseMessage, SystemMessage, AIMessage
+from langchain_core.messages import BaseMessage, SystemMessage, AIMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langgraph.graph import StateGraph, END
+from langgraph.graph import StateGraph, END, START
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.types import Command
+from langgraph.graph.message import add_messages
+
+from copilotkit import CopilotKitState
+
+from agent.tools import all_tools
+from agent.config import settingsList, Annotated
+import logging
+
+from langchain_core.messages import BaseMessage, SystemMessage, AIMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langgraph.graph import StateGraph, END, START
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph.message import add_messages
+from langgraph.prebuilt import ToolNode, tools_condition
 
 from copilotkit import CopilotKitState
 
 from agent.tools import all_tools
 from agent.config import settings
 
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 class AgentState(CopilotKitState):
-    messages: List[BaseMessage] = []
+    messages: Annotated[List[BaseMessage], add_messages]
 
 
 def get_llm():
@@ -32,83 +49,48 @@ def get_embeddings():
     return OpenAIEmbeddings(api_key=settings.openai_api_key)
 
 
-async def chat_node(state: AgentState, config: RunnableConfig) -> Command:
-    """Main chat node. Calls the LLM (with tools bound) and decides next step.
-
-    If the model emits a tool call the node will return a Command sending the
-    state to the `tool_node`. Otherwise it ends the run and returns the final
-    messages so they are persisted.
-    """
+def chat_node(state: AgentState, config: RunnableConfig):
+    """Main chat node. Calls the LLM (with tools bound) and decides next step."""
     model = get_llm()
 
+    # Get CopilotKit frontend actions
     copilot_actions = state.get("copilotkit", {}).get("actions", []) or []
     tools = [*all_tools, *copilot_actions]
     model_with_tools = model.bind_tools(tools)
 
+    # Add system message to the conversation
     system_message = SystemMessage(content="You are a helpful customer support assistant. Use tools when necessary to answer user queries, for example product search or order lookup.")
 
-    response = await model_with_tools.ainvoke([
-        system_message,
-        *state["messages"],
-    ], config)
+    messages_to_send = [system_message] + state.get("messages", [])
+    response = model_with_tools.invoke(messages_to_send, config)
 
-    if isinstance(response, AIMessage) and getattr(response, "tool_calls", None):
-        return Command(goto="tool_node", update={"messages": response})
-    return Command(goto=END, update={"messages": response})
-
-
-async def tool_node(state: AgentState, config: RunnableConfig) -> Command:
-    """Executes tool calls emitted by the model and returns outputs back to the agent.
-
-    This node inspects the last message for tool_calls, executes each matching
-    tool from `all_tools`, collects results and returns a new AIMessage with
-    the tool outputs so the LLM can incorporate them on the next turn.
-    """
-    last_message = state["messages"][-1]
-
-    tool_calls = getattr(last_message, "tool_calls", None) or []
-    if not tool_calls:
-        return Command(goto=END, update={"messages": last_message})
-
-    outputs: List[str] = []
-
-    for tc in tool_calls:
-        name = tc.get("name")
-        args = tc.get("args") or tc.get("input")
-
-        tool = next((t for t in all_tools if getattr(t, "name", None) == name), None)
-        if not tool:
-            outputs.append(f"No tool named '{name}' registered.")
-            continue
-
-        try:
-            if hasattr(tool, "arun"):
-                if isinstance(args, dict):
-                    result = await tool.arun(**args)
-                else:
-                    result = await tool.arun(args)
-            else:
-                if isinstance(args, dict):
-                    result = tool.run(**args)
-                else:
-                    result = tool.run(args)
-
-            outputs.append(str(result))
-        except Exception as e:
-            outputs.append(f"Error running tool '{name}': {e}")
-
-    combined = "\n\n".join(outputs)
-    tool_response = AIMessage(content=combined)
-
-    return Command(goto="chat_node", update={"messages": tool_response})
-
+    return {"messages": [response]}
 
 def create_agent_graph():
     """Builds and compiles the LangGraph StateGraph for the agent."""
+    from langgraph.prebuilt import ToolNode, tools_condition
+    
+    # Create the graph with our custom state
     graph = StateGraph(AgentState)
+    
+    # Add the chat node
     graph.add_node("chat_node", chat_node)
-    graph.add_node("tool_node", tool_node)
-    graph.set_entry_point("chat_node")
-
-    runnable = graph.compile(MemorySaver())
+    
+    # Create and add the tool node using LangGraph's prebuilt ToolNode
+    tool_node = ToolNode(all_tools)
+    graph.add_node("tools", tool_node)
+    
+    # Set the entry point
+    graph.add_edge(START, "chat_node")
+    
+    graph.add_conditional_edges(
+        "chat_node",
+        tools_condition,
+        path_map=["tools", END]
+    )
+    
+    graph.add_edge("tools", "chat_node")
+    
+    # Use MemorySaver for checkpointing
+    runnable = graph.compile(checkpointer=MemorySaver())
     return runnable

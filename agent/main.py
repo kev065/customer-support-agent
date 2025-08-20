@@ -15,14 +15,12 @@ import re
 import logging
 from typing import Any, Dict, List, Optional
 
-
 app = FastAPI()
 
 @app.middleware("http")
 async def ensure_copilotkit_trailing_slash(request, call_next):
     try:
         path = request.url.path
-        # Only rewrite POST/OPTIONS to avoid interfering with other methods
         if path == "/copilotkit" and request.method in ("POST", "OPTIONS"):
             request.scope["path"] = "/copilotkit/"
     except Exception:
@@ -40,7 +38,6 @@ app.add_middleware(
 
 agent_graph = create_agent_graph()
 
-# Initialize a CopilotKit remote endpoint and register the LangGraph agent
 sdk = CopilotKitRemoteEndpoint(
     agents=[
         LangGraphAgent(
@@ -51,7 +48,6 @@ sdk = CopilotKitRemoteEndpoint(
     ]
 )
 
-# Mount the CopilotKit endpoint at /copilotkit
 add_fastapi_endpoint(app, sdk, "/copilotkit", use_thread_pool=False)
 
 
@@ -218,7 +214,7 @@ def post_message(session_id: str, req: MessageRequest) -> MessageResponse:
 
         assistant_msg = AIMessage(content="\n\n".join(followup_texts))
 
-        # Ask the model explicitly to produce a concise, user-facing reply
+        # Ask the model to produce a concise reply
         followup_instruction = HumanMessage(content=(
             "Using the TOOL_OUTPUTS above, produce a concise natural-language reply to the user. "
             "Start with a one-line summary, then optionally add one short paragraph of details. "
@@ -234,7 +230,7 @@ def post_message(session_id: str, req: MessageRequest) -> MessageResponse:
 
         # If the model didn't return a friendly reply for any reason, craft a small fallback
         if not final or not str(final).strip():
-            # Try to craft a reply from known tool outputs (e.g., get_order_details)
+            # Try to craft a reply from a tool output like get_order_details
             fallback = None
             for t in tool_outputs_for_model:
                 if t["tool"] == "get_order_details":
