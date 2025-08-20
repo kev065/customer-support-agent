@@ -33,7 +33,6 @@ The system is composed of several key components that work together:
 
 - [Git](https://git-scm.com/)
 - [Python 3.10+](https://www.python.org/)
-- [Node.js & npm](https://nodejs.org/)
 - [Docker](https://www.docker.com/) or [Podman](https://podman.io/) (for running Qdrant)
 
 ### 1. Clone the Repository
