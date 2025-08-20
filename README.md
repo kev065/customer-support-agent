@@ -82,17 +82,51 @@ docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
 
 To run the full application, you will need to start three separate services in three different terminals.
 
-- **Terminal 1: Real-time Sync Service**
-  Make sure your Python virtual environment is active.
-  ```bash
-  source agent/venv/bin/activate
-  python -m agent.sync
-  ```
-
-- **Terminal 2: Backend Server**
-  Make sure your Python virtual environment is active.
+- **Terminal 1: Backend Server**
   ```bash
   source agent/venv/bin/activate
   uvicorn agent.main:app --reload
   ```
+- **Terminal 2: Qdrant Server**
+  ```bash
+  podman run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage:z qdrant/qdrant
+  ```
+- **Terminal 3: Real-time Sync Service**
 
+  ```bash
+  source agent/venv/bin/activate
+  python -m agent.sync
+  ```
+## Testing the Application
+Open up your REST client e.g. postman, Flash Post or EchoAPI
+
+- **Step 1: Create a Session**
+
+  ```http
+  Method: POST
+  URL: http://localhost:8000/sessions
+  Body: (empty or just {})
+  ```
+
+  Expected Response:
+
+  ```
+  {
+    "session_id": "some-uuid-here"
+  }
+  ```
+
+- **Step 2: Send Messages to Your Agent**
+
+  ```http
+  Method: POST
+  URL: http://localhost:8000/sessions/{session_id}/message
+  (Replace {session_id} with the actual session ID from Step 1 above)
+
+  Headers: Content-Type: application/json
+
+  Body:
+  {
+    "text": "What's the status of order 16?"
+  }
+  ```
