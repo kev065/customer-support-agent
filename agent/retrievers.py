@@ -1,5 +1,4 @@
-
-from langchain_qdrant import Qdrant
+from langchain_qdrant import QdrantVectorStore
 from langchain_openai import OpenAIEmbeddings
 from qdrant_client import QdrantClient
 
@@ -13,10 +12,10 @@ def get_qdrant_retriever():
     embeddings = OpenAIEmbeddings(api_key=settings.openai_api_key)
     client = QdrantClient(url=settings.qdrant_url)
 
-    vector_store = Qdrant(
+    vector_store = QdrantVectorStore(
         client=client,
         collection_name="products",
-        embeddings=embeddings,
+        embedding=embeddings,
     )
     
     return vector_store.as_retriever()
