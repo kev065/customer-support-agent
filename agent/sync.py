@@ -9,10 +9,9 @@ from qdrant_client import QdrantClient, models
 from agent.config import settings
 from agent.llm import get_embeddings
 
-# --- Configuration ---
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# Qdrant configuration
+# Qdrant config
 QDRANT_COLLECTION_NAME = "products"
 VECTOR_SIZE = 1536 # OpenAI's text-embedding-ada-002
 
