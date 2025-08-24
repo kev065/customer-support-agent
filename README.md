@@ -92,5 +92,3 @@ To run the full application, you will need to start 2 separate terminals.
   source agent/venv/bin/activate
   python3 agent/customer_support_agent.py
   ```
-
-  ```
