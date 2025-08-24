@@ -8,7 +8,6 @@ AI-powered customer support agent for an e-commerce platform. It uses openai and
 - **Real-time Customer Support:** An interactive repl chat interface for customers to get help.
 - **Context-Aware Responses:** uses data from order history, product information to inform its answers.
 - **Semantic Search:** Utilizes a Qdrant as the vector database to perform semantic searches over product descriptions and other unstructured data.
-- **Persistent Data Sync:** A real-time synchronization service keeps the Qdrant vector store perfectly in sync with the primary postgres database.
 
 ## Tech Stack
 
@@ -42,7 +41,81 @@ git clone git@github.com:kev065/customer-support-agent.git
 cd customer-support-agent
 ```
 
-### 2. Set up Qdrant
+### 2. Set up the environment
+
+- **Create Virtual Environment:**
+  ```bash
+  python3 -m venv agent/venv
+  source agent/venv/bin/activate
+  ```
+
+- **Install Dependencies:**
+  ```bash
+  pip install -r requirements.txt
+  ```
+
+- **Configure Environment Variables:**
+  Create a file named `.env` inside the `agent/` directory (`agent/.env`) and add the following, replacing the placeholder values:
+  ```dotenv
+  DATABASE_URL="postgresql://store_user:password@localhost:5432/mydatabase2"
+  QDRANT_URL="http://localhost:6333"
+  OPENAI_API_KEY="your-openai-api-key"
+  LANGCHAIN_API_KEY="your-langchain-api-key"
+  LANGCHAIN_TRACING_V2=true
+  LANGCHAIN_PROJECT=CUSTOMER_SUPPORT
+  ```
+
+### 3. Set up PostgreSQL
+
+create the database 'mydatabase2' and user 'store_user' inside postgres.
+  ``` 
+-- log into postgres as a superuser
+sudo -u postgres psql 
+\c postgres;
+
+-- create the database
+CREATE DATABASE mydatabase2;
+
+-- create the user with a password
+CREATE USER store_user WITH PASSWORD password;
+
+-- grant privileges
+GRANT ALL PRIVILEGES ON DATABASE mydatabase2 TO store_user;
+  ```
+
+Point your seed script to use store_user. in your shell:
+
+``` 
+export DATABASE_URL="postgresql+psycopg2://store_user:password@localhost:5432/mydatabase2"
+```
+
+Run seed script:
+```bash
+python3 agent/seed.py
+```
+
+Run add_categories.py. Uses open ai to classify all products into categories. This adds a 'category' column to all products in the db
+```bash
+python3 agent/add_categories.py
+```
+
+Run the embedding script to populate Qdrant with initial data:
+```bash
+python3 agent/embed.py
+```
+
+### 4. Set up Qdrant
+Pull the qdrant image
+
+```bash
+podman pull qdrant/qdrant
+```
+
+For embeddings to survive machine restarts:
+
+```
+mkdir -p ./qdrant_data
+```
 
 Start the Qdrant vector database using Docker or Podman. This command will persist your data in a `qdrant_storage` directory in your project root.
 
@@ -54,40 +127,10 @@ podman run -p 6333:6333 -v $(pwd)/qdrant_data:/qdrant/storage:z qdrant/qdrant
 docker run -p 6333:6333 -v $(pwd)/qdrant_data:/qdrant/storage qdrant/qdrant
 ```
 
-### 3. Set up the env (`agent/`)
-
-- **Create Virtual Environment:**
-  ```bash
-  python3 -m venv agent/venv
-  source agent/venv/bin/activate
-  ```
-
-- **Install Dependencies:**
-  ```bash
-  pip install -r agent/requirements.txt
-  ```
-
-- **Configure Environment Variables:**
-  Create a file named `.env` inside the `agent/` directory (`agent/.env`) and add the following, replacing the placeholder values:
-  ```dotenv
-  DATABASE_URL="postgresql://your_user:your_password@localhost:5432/your_db"
-  QDRANT_URL="http://localhost:6333"
-  OPENAI_API_KEY="your-openai-api-key"
-  LANGCHAIN_API_KEY="your-langchain-api-key"
-  LANGCHAIN_TRACING_V2=true
-  LANGCHAIN_PROJECT=CUSTOMER_SUPPORT
-  ```
-
 ## Running the Application
 
-To run the full application, you will need to start 2 separate terminals.
+To run the application, run the following commands in a python environment.
 
-- **Terminal 1: Qdrant Server**
-  ```bash
-  podman run -p 6333:6333 -v $(pwd)/qdrant_data:/qdrant/storage:z qdrant/qdrant
-  ```
-
-- **Terminal 2: customer service agent**
   ```bash
   source agent/venv/bin/activate
   python3 agent/customer_support_agent.py
