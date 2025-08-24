@@ -8,6 +8,7 @@ AI-powered customer support agent for an e-commerce platform. It uses openai and
 - **Real-time Customer Support:** An interactive repl chat interface for customers to get help.
 - **Context-Aware Responses:** uses data from order history, product information to inform its answers.
 - **Semantic Search:** Utilizes a Qdrant as the vector database to perform semantic searches over product descriptions and other unstructured data.
+- **Persistent Data Sync:** A real-time synchronization service keeps the Qdrant vector store perfectly in sync with the postgres database.
 
 ## Tech Stack
 
@@ -127,7 +128,17 @@ podman run -p 6333:6333 -v $(pwd)/qdrant_data:/qdrant/storage:z qdrant/qdrant
 docker run -p 6333:6333 -v $(pwd)/qdrant_data:/qdrant/storage qdrant/qdrant
 ```
 
-## Running the Application
+### 5. Set up Sync
+
+- **`agent/sync.py` (Real-time Sync Service):** background service that listens for changes in the Postgres database using the `NOTIFY`/`LISTEN` mechanism. When a record (e.g., a product) is created, updated, or deleted, this service immediately processes the change, generates a new vector embedding if necessary, and upserts or deletes the corresponding entry in Qdrant.
+
+Run the sync script in a separate terminal tab.
+
+```bash
+python3 agent/sync.py
+```
+
+## 6. Running the Application
 
 To run the application, run the following commands in a python environment.
 
