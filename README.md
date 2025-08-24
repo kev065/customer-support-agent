@@ -5,8 +5,8 @@ AI-powered customer support agent for an e-commerce platform. It uses openai and
 
 ## Key Features
 
-- **Real-time Customer Support:** An interactive chat interface for customers to get help.
-- **Context-Aware Responses:** uses data from order history, product information, and previous interactions to inform its answers.
+- **Real-time Customer Support:** An interactive repl chat interface for customers to get help.
+- **Context-Aware Responses:** uses data from order history, product information to inform its answers.
 - **Semantic Search:** Utilizes a Qdrant as the vector database to perform semantic searches over product descriptions and other unstructured data.
 - **Persistent Data Sync:** A real-time synchronization service keeps the Qdrant vector store perfectly in sync with the primary postgres database.
 
@@ -21,11 +21,11 @@ AI-powered customer support agent for an e-commerce platform. It uses openai and
 
 The system is composed of several key components that work together:
 
-- **`agent/`:** python application built with FastAPI. It serves the main API, handles all LLM-related logic using LangChain, and communicates with the Postgres and Qdrant databases.
+- **`agent/customer_support_agent.py`:** python script that serves as the main file for the interactive shell. handles all LLM-related logic using LangChain, and communicates with the Postgres and Qdrant databases to handle customer queies.
 
 - **`agent/sync.py` (Real-time Sync Service):** background service that listens for changes in the Postgres database using the `NOTIFY`/`LISTEN` mechanism. When a record (e.g., a product) is created, updated, or deleted, this service immediately processes the change, generates a new vector embedding if necessary, and upserts or deletes the corresponding entry in Qdrant.
 
-- **`agent/backfill.py` (Data Backfill Script):** A one-time script used to populate the Qdrant database with embeddings from all the existing data in Postgres.
+- **`agent/embed.py` (Data Embedding Script):** A one-time script used to populate the Qdrant database with embeddings from all the existing data in Postgres.
 
 ## Setup and Installation
 
@@ -48,13 +48,13 @@ Start the Qdrant vector database using Docker or Podman. This command will persi
 
 ```bash
 # Using Podman
-podman run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage:z qdrant/qdrant
+podman run -p 6333:6333 -v $(pwd)/qdrant_data:/qdrant/storage:z qdrant/qdrant
 
 # Or using Docker
-docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
+docker run -p 6333:6333 -v $(pwd)/qdrant_data:/qdrant/storage qdrant/qdrant
 ```
 
-### 3. Set up the Backend (`agent/`)
+### 3. Set up the env (`agent/`)
 
 - **Create Virtual Environment:**
   ```bash
@@ -80,53 +80,17 @@ docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
 
 ## Running the Application
 
-To run the full application, you will need to start three separate services in three different terminals.
+To run the full application, you will need to start 2 separate terminals.
 
-- **Terminal 1: Backend Server**
+- **Terminal 1: Qdrant Server**
+  ```bash
+  podman run -p 6333:6333 -v $(pwd)/qdrant_data:/qdrant/storage:z qdrant/qdrant
+  ```
+
+- **Terminal 2: customer service agent**
   ```bash
   source agent/venv/bin/activate
-  uvicorn agent.main:app --reload
-  ```
-- **Terminal 2: Qdrant Server**
-  ```bash
-  podman run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage:z qdrant/qdrant
-  ```
-- **Terminal 3: Real-time Sync Service**
-
-  ```bash
-  source agent/venv/bin/activate
-  python -m agent.sync
-  ```
-## Testing the Application
-Open up your REST client e.g. postman, Flash Post or EchoAPI
-
-- **Step 1: Create a Session**
-
-  ```http
-  Method: POST
-  URL: http://localhost:8000/sessions
-  Body: (empty or just {})
+  python3 agent/customer_support_agent.py
   ```
 
-  Expected Response:
-
-  ```
-  {
-    "session_id": "some-uuid-here"
-  }
-  ```
-
-- **Step 2: Send Messages to Your Agent**
-
-  ```http
-  Method: POST
-  URL: http://localhost:8000/sessions/{session_id}/message
-  (Replace {session_id} with the actual session ID from Step 1 above)
-
-  Headers: Content-Type: application/json
-
-  Body:
-  {
-    "text": "What's the status of order 16?"
-  }
   ```
