@@ -92,3 +92,12 @@ To run the full application, you will need to start 2 separate terminals.
   source agent/venv/bin/activate
   python3 agent/customer_support_agent.py
   ```
+
+  In the interactive shell, you can now start asking questions related to customer support. The agent will intelligently route your queries to the appropriate service (SQL or vector search) based on the content of your questions.
+
+  Try asking these questions:
+  - "What is the status of order 28?"
+  - "Tell me about the watches you sell"
+  - "What are your return policies?"
+  - "Can you recommend some phones i can buy that you sell"
+  - "How do I track my shipment?"
